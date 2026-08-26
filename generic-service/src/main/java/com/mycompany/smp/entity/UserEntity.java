@@ -31,13 +31,14 @@ public class UserEntity {
     private LocalDate createdAt;
     private LocalDate updatedAt;
 
+    // 🛑 ADD THIS LINE HERE: Defaults new accounts to active status
+    // Inside your UserEntity.java file:
+    @Column(name = "active", nullable = false, columnDefinition = "boolean default true")
+    private boolean active = true;
+
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "users_to_roles", joinColumns = @JoinColumn(name = "user_id"),
-               inverseJoinColumns = @JoinColumn(name = "role_id"))
+            inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<RoleEntity> roles = new HashSet<>();
-
-
-
-
-
 }

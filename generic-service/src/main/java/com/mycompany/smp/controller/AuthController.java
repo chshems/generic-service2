@@ -10,7 +10,6 @@ import com.mycompany.smp.repository.UserRepository;
 import com.mycompany.smp.service.JwtServiceImpl;
 import com.mycompany.smp.service.UserDetailsImpl;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -30,24 +29,30 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/noauth")
 public class AuthController {
 
-    @Autowired
-    AuthenticationManager authenticationManager;
-    @Autowired
-    UserRepository userRepository;
+    // 🛡️ All dependencies declared as final (Immutable and clean)
+    private final AuthenticationManager authenticationManager;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder encoder;
+    private final JwtServiceImpl jwtService;
 
-    @Autowired
-    RoleRepository roleRepository;
-
-    @Autowired
-    PasswordEncoder encoder;
-
-    @Autowired
-    JwtServiceImpl jwtService;
+    // ⚡ Constructor Injection: Resolves the field injection warning entirely!
+    public AuthController(AuthenticationManager authenticationManager,
+                          UserRepository userRepository,
+                          RoleRepository roleRepository,
+                          PasswordEncoder encoder,
+                          JwtServiceImpl jwtService) {
+        this.authenticationManager = authenticationManager;
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+        this.encoder = encoder;
+        this.jwtService = jwtService;
+    }
 
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequestDTO loginRequest) {
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(loginRequest.getEmail(),loginRequest.getPassword())
+                new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
         String jwt = jwtService.generateJwtToken(authentication);
@@ -64,69 +69,61 @@ public class AuthController {
                 userDetails.getLastName(),
                 userDetails.getEmail(),
                 roles
-                ));
-     }
+        ));
+    }
 
-     @PostMapping("/signup")
-     public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequestDTO signupRequest) {
+    @PostMapping("/signup")
+    public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequestDTO signupRequest) {
         if(userRepository.existsByEmail(signupRequest.getEmail())) {
-    //        return ResponseEntity
-     //               .badRequest()
-      //              .body(new MessageResponseDTO("Error: Email is already taken!"));
             ErrorDTO err = new ErrorDTO();
             err.setCode("AUTH_005");
             err.setMessage("Email is already taken");
             throw new BusinessException(List.of(err));
         }
-        //Create new user's account
-         UserEntity user = new UserEntity();
+
+        UserEntity user = new UserEntity();
         user.setFirstName(signupRequest.getFirstName());
         user.setLastName(signupRequest.getLastName());
         user.setEmail(signupRequest.getEmail());
         user.setPassword(encoder.encode(signupRequest.getPassword()));
-         Set<String> strRoles = signupRequest.getRoles();
-         Set<RoleEntity> roles = new HashSet<>();
 
-         if(strRoles == null) {
-             RoleEntity userRole = roleRepository.findByName(ERole.ROLE_CONSUMER)
-                     .orElseThrow(()-> new RuntimeException("Error: Role is not found."));
-             roles.add(userRole);
-         } else {
-             strRoles.forEach(role -> {
-                 switch (role) {
-                     case "ROLE_ADMIN":
-                         RoleEntity adminRole = roleRepository.findByName(ERole.ROLE_ADMIN)
-                                 .orElseThrow(()-> new RuntimeException("Error: Role is nor found."));
-                         roles.add(adminRole);
+        // Match structural fields from your UserEntity schema specifications
+        user.setActive(true);
 
-                         break;
-                     case "ROLE_CONSUMER":
-                         RoleEntity modRole = roleRepository.findByName(ERole.ROLE_CONSUMER)
-                                 .orElseThrow(()-> new RuntimeException("Error: Role is nor found."));
-                         roles.add(modRole);
-                         break;
-                     case "ROLE_PROVIDER" :
-                         RoleEntity managerRole = roleRepository.findByName(ERole.ROLE_PROVIDER)
-                                 .orElseThrow(()-> new RuntimeException("Error: Role is nor found."));
-                         roles.add(managerRole);
-                         break;
-                     default:
-                         RoleEntity userRole = roleRepository.findByName(ERole.ROLE_CONSUMER)
-                                 .orElseThrow(()-> new RuntimeException("Error: Role is nor found."));
-                         roles.add(userRole);
+        Set<String> strRoles = signupRequest.getRoles();
+        Set<RoleEntity> roles = new HashSet<>();
 
-
-                 }
-             });
-         }
-         user.setRoles(roles);
-         userRepository.save(user);
-         return new ResponseEntity(new MessageResponseDTO("User registered successfully!"), HttpStatus.CREATED);
-
-
-
-     }
-
-
-
+        if(strRoles == null) {
+            RoleEntity userRole = roleRepository.findByName(ERole.ROLE_CONSUMER)
+                    .orElseThrow(()-> new RuntimeException("Error: Role is not found."));
+            roles.add(userRole);
+        } else {
+            strRoles.forEach(role -> {
+                switch (role) {
+                    case "ROLE_ADMIN":
+                        RoleEntity adminRole = roleRepository.findByName(ERole.ROLE_ADMIN)
+                                .orElseThrow(()-> new RuntimeException("Error: Role is not found."));
+                        roles.add(adminRole);
+                        break;
+                    case "ROLE_CONSUMER":
+                        RoleEntity modRole = roleRepository.findByName(ERole.ROLE_CONSUMER)
+                                .orElseThrow(()-> new RuntimeException("Error: Role is not found."));
+                        roles.add(modRole);
+                        break;
+                    case "ROLE_PROVIDER" :
+                        RoleEntity managerRole = roleRepository.findByName(ERole.ROLE_PROVIDER)
+                                .orElseThrow(()-> new RuntimeException("Error: Role is not found."));
+                        roles.add(managerRole);
+                        break;
+                    default:
+                        RoleEntity userRole = roleRepository.findByName(ERole.ROLE_CONSUMER)
+                                .orElseThrow(()-> new RuntimeException("Error: Role is not found."));
+                        roles.add(userRole);
+                }
+            });
+        }
+        user.setRoles(roles);
+        userRepository.save(user);
+        return new ResponseEntity<>(new MessageResponseDTO("User registered successfully!"), HttpStatus.CREATED);
+    }
 }

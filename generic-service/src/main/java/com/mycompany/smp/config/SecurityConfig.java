@@ -2,7 +2,6 @@ package com.mycompany.smp.config;
 
 import com.mycompany.smp.exception.AuthEntryPointJwt;
 import com.mycompany.smp.filter.JwtAuthFilet;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -19,35 +18,61 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    @Autowired
-    private JwtAuthFilet authFilet;
+    private final JwtAuthFilet authFilet;
+    private final AuthEntryPointJwt authEntryPointJwt;
+    private final UserDetailsService userDetailsService;
 
-    @Autowired
-    private AuthEntryPointJwt authEntryPointJwt;
-
-    @Autowired
-    public UserDetailsService userDetailsService;
+    // ⚡ FIX: Constructor Injection resolves your remaining Field Injection warnings!
+    public SecurityConfig(JwtAuthFilet authFilet,
+                          AuthEntryPointJwt authEntryPointJwt,
+                          UserDetailsService userDetailsService) {
+        this.authFilet = authFilet;
+        this.authEntryPointJwt = authEntryPointJwt;
+        this.userDetailsService = userDetailsService;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-       http.csrf(AbstractHttpConfigurer::disable)
-               .authorizeHttpRequests(req ->
-                       req.requestMatchers("/api/v1/noauth/**").permitAll()
-                               .anyRequest().authenticated()
-               )
+        http
+                // 🛑 ADD THIS LINE: Tells Spring Boot to leverage our custom configuration bean
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
+                .exceptionHandling(exception -> exception.authenticationEntryPoint(authEntryPointJwt))
+                .authorizeHttpRequests(req ->
+                        req.requestMatchers("/api/v1/noauth/**").permitAll()
+                                .anyRequest().authenticated()
+                )
+                .authenticationProvider(authenticationProvider())
+                .sessionManagement(httpSecuritySessionManagementConfigurer ->
+                        httpSecuritySessionManagementConfigurer.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(authFilet, UsernamePasswordAuthenticationFilter.class);
 
-               .authenticationProvider(authenticationProvider())
-               .sessionManagement(httpSecuritySessionManagementConfigurer ->
-                       httpSecuritySessionManagementConfigurer.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-               .addFilterBefore(authFilet, UsernamePasswordAuthenticationFilter.class);
-       return http.build();
+        return http.build();
+    }
 
+    // 🌐 ADD THIS BEAN: Allows your React Frontend port to safely make API queries
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of("http://localhost:5173")); // Trust your React server
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
+        configuration.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration); // Apply globally to all paths
+        return source;
     }
 
     @Bean
@@ -59,7 +84,6 @@ public class SecurityConfig {
     public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
         authenticationProvider.setUserDetailsService(userDetailsService);
-        // Restored: Now cleanly calling the local method
         authenticationProvider.setPasswordEncoder(passwordEncoder());
         return authenticationProvider;
     }

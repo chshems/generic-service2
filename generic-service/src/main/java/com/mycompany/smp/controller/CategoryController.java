@@ -5,8 +5,6 @@ import com.mycompany.smp.entity.CategoryEntity;
 import com.mycompany.smp.exception.BusinessException;
 import com.mycompany.smp.repository.CategoryRepository;
 import jakarta.validation.Valid;
-import org.springframework.beans.BeanUtils;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
